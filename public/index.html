@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Empire Login Dashboard</title>
+  <style>
+    body {
+      font-family: monospace;
+      background-color: #0d0d0d;
+      color: #eee;
+      padding: 2rem;
+    }
+
+    h1 {
+      color: #0ff;
+    }
+
+    .account {
+      margin: 10px 0;
+      font-size: 1.2rem;
+    }
+
+    .status {
+      font-weight: bold;
+      margin-left: 10px;
+      padding: 2px 8px;
+      border-radius: 5px;
+    }
+
+    .connected {
+      background-color: limegreen;
+      color: black;
+    }
+
+    .disconnected {
+      background-color: crimson;
+      color: white;
+    }
+
+    .controls {
+      margin-top: 2rem;
+    }
+
+    button {
+      padding: 0.7rem 1.5rem;
+      font-size: 1rem;
+      background-color: #222;
+      color: #0ff;
+      border: 1px solid #0ff;
+      margin-right: 10px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background-color: #0ff;
+      color: #000;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    pre {
+      background-color: #111;
+      padding: 1rem;
+      margin-top: 2rem;
+      border: 1px solid #333;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 Empire Bot Dashboard</h1>
+  <p>Live Status aller verbundenen Server:</p>
+
+  <div id="accounts">Lade Verbindungen...</div>
+
+  <div class="controls">
+    <h2>⚙️ Python Bot Steuerung</h2>
+    <button id="startBtn" onclick="startBot()">✅ Bot starten</button>
+    <button id="stopBtn" onclick="stopBot()" disabled>🛑 Bot stoppen</button>
+  </div>
+
+  <pre id="log">🧠 Bot-Logs erscheinen hier...</pre>
+
+  <script>
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        const container = document.getElementById("accounts");
+        container.innerHTML = "";
+
+        Object.entries(data).forEach(([server, status]) => {
+          const el = document.createElement("div");
+          el.className = "account";
+          el.innerHTML = `
+            🌐 ${server}
+            <span class="status ${status}">
+              ${status === "connected" ? "🟢 Verbunden" : "🔴 Getrennt"}
+            </span>
+          `;
+          container.appendChild(el);
+        });
+      } catch (err) {
+        document.getElementById("accounts").innerText = "❌ Fehler beim Laden.";
+      }
+    }
+
+    async function startBot() {
+      const res = await fetch("/api/bot/start", { method: "POST" });
+      const txt = await res.text();
+      appendLog(`✅ Bot gestartet: ${txt}`);
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("stopBtn").disabled = false;
+    }
+
+    async function stopBot() {
+      const res = await fetch("/api/bot/stop", { method: "POST" });
+      const txt = await res.text();
+      appendLog(`🛑 Bot gestoppt: ${txt}`);
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+    }
+
+    function appendLog(msg) {
+      const log = document.getElementById("log");
+      log.textContent += `\n${new Date().toLocaleTimeString()} ▶ ${msg}`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    fetchStatus();
+    setInterval(fetchStatus, 5000); // alle 5 Sekunden aktualisieren
+  </script>
+</body>
+</html>

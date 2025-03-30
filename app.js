@@ -1,58 +1,33 @@
-const express = require('express');
-const commands = require('./data/commands.json');
-const { setNestedValue } = require('./utils/nestedHeaders');
-
-module.exports = function (sockets) {
+module.exports = (sockets) => {
+    const express = require('express');
     const app = express();
-
-    app.use((req, res, next) => {
-        res.header("Access-Control-Allow-Origin", "*");
-        res.header("Access-Control-Allow-Methods", "GET");
-        res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-        next();
+  
+    app.use(express.json());
+    app.use(express.static(__dirname + '/public'));
+  
+    // === 🔍 STATUS API ===
+    app.get('/api/status', (req, res) => {
+      const result = {};
+      for (const [serverHeader, socket] of Object.entries(sockets)) {
+        result[serverHeader] = socket.socket ? "connected" : "disconnected";
+      }
+      res.json(result);
     });
-
-    app.get("/:server/:command/:headers", async (req, res) => {
-        if (req.params.server in sockets) {
-            if (sockets[req.params.server] !== null && sockets[req.params.server].connected.isSet) {
-                try {
-                    const messageHeaders = JSON.parse(`{${req.params.headers}}`);
-                    sockets[req.params.server].socket.sendJsonCommand(req.params.command, messageHeaders);
-
-                    let responseHeaders = {};
-                    if (req.params.command in commands) {
-                        for (const [messageKey, responsePath] of Object.entries(commands[req.params.command])) {
-                            if (messageKey in messageHeaders) {
-                                setNestedValue(responseHeaders, responsePath, messageHeaders[messageKey]);
-                            }
-                        }    
-                    } else {
-                        responseHeaders = messageHeaders;
-                    }
-
-                    const response = await sockets[req.params.server].socket.waitForJsonResponse(req.params.command, responseHeaders, timeout = 1000);
-                    res.status(200).json({server: req.params.server, command: req.params.command, return_code: response.payload.status, content: response.payload.data});
-                } catch (error) {
-                    console.log(error.message);
-                    res.status(400).json({ error: "Invalid command or headers" });
-                }
-            } else {
-                res.status(500).json({ error: "Server not connected" });
-            }
-        } else {
-            res.status(404).json({ error: "Server not found" });
-        }
+  
+    // === 🛰️ SEND MESSAGE TO SERVER ===
+    app.post('/api/send', (req, res) => {
+      const { server, message } = req.body;
+      if (!sockets[server] || !sockets[server].socket) {
+        return res.status(400).json({ error: "Socket nicht verbunden" });
+      }
+  
+      try {
+        sockets[server].send(message);
+        res.json({ success: true });
+      } catch (e) {
+        res.status(500).json({ error: e.message });
+      }
     });
-
-    app.get("/status", (req, res) => {
-        const status = {};
-        for (const [server, socket] of Object.entries(sockets)) {
-            status[server] = socket.connected.isSet;
-        }
-        res.status(200).json(status);
-    });
-
-    app.get("/", (req, res) => res.status(200).send("API running"));
-
+  
     return app;
-}
+  };
